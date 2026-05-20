@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐟 Singin' Goldie</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Press Start 2P', monospace;
+  }
+
+  #app {
+    position: relative;
+    width: 900px;
+    height: 550px;
+    border: 3px solid #00ffe7;
+    box-shadow: 0 0 40px #00ffe780, inset 0 0 60px #001a2f;
+    overflow: hidden;
+    border-radius: 6px;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #001428 0%, #002244 60%, #001a35 100%);
+    z-index: 10;
+  }
+  .screen.hidden { display: none; }
+
+  .screen h1 {
+    font-size: 28px; color: #ffd700;
+    text-shadow: 0 0 20px #ffa500, 0 0 40px #ff6600;
+    margin-bottom: 10px; text-align: center;
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+  .screen .sub {
+    font-size: 9px; color: #00ffe7;
+    margin-bottom: 30px; letter-spacing: 2px;
+  }
+  @keyframes glow {
+    from { text-shadow: 0 0 10px #ffa500; }
+    to   { text-shadow: 0 0 30px #ffa500, 0 0 60px #ff4400; }
+  }
+
+  .screen p {
+    font-size: 9px; color: #aaddff; text-align: center;
+    line-height: 2; max-width: 600px; margin-bottom: 20px;
+  }
+
+  .btn {
+    padding: 12px 28px; font-family: 'Press Start 2P', monospace;
+    font-size: 10px; background: #ffd700; color: #1a0a00;
+    border: none; cursor: pointer; border-radius: 3px;
+    box-shadow: 0 4px 0 #aa7700, 0 0 20px #ffd70060;
+    transition: transform .1s, box-shadow .1s;
+    margin: 8px;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #aa7700, 0 0 30px #ffd70080; }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #aa7700; }
+
+  .btn.secondary { background: #00ffe7; color: #001a2f; box-shadow: 0 4px 0 #007766, 0 0 20px #00ffe760; }
+  .btn.secondary:hover { box-shadow: 0 6px 0 #007766, 0 0 30px #00ffe780; }
+
+  /* Calibration */
+  #calibration { gap: 18px; }
+  .calib-step { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .calib-step label { font-size: 8px; color: #ffd700; }
+  .pitch-display {
+    font-family: 'VT323', monospace; font-size: 48px;
+    min-width: 120px; text-align: center;
+    padding: 6px 20px; border: 2px solid currentColor;
+    border-radius: 4px; background: rgba(0,0,0,.4);
+    transition: color .15s;
+  }
+  .pitch-bar-wrap {
+    width: 300px; height: 14px; background: #001a2f;
+    border: 1px solid #00ffe740; border-radius: 7px; overflow: hidden;
+  }
+  .pitch-bar { height: 100%; width: 0%; border-radius: 7px; transition: width .08s; }
+  .mic-note { font-size: 8px; color: #6688aa; }
+  .steps-row { display: flex; gap: 30px; }
+  .step-done { color: #00ff88 !important; }
+
+  /* ── GAME CANVAS ── */
+  #gameCanvas {
+    position: absolute; inset: 0;
+    image-rendering: pixelated;
+    display: none;
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: none; pointer-events: none; z-index: 5;
+    padding: 10px 16px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px; color: #fff;
+    display: none; justify-content: space-between; align-items: flex-start;
+  }
+  #score-display { color: #ffd700; text-shadow: 0 0 8px #ffa500; }
+  #lives-display { color: #ff4466; }
+  #note-hud {
+    position: absolute; bottom: 14px; left: 16px;
+    font-family: 'VT323', monospace; font-size: 42px;
+    display: none; z-index: 6; pointer-events: none;
+  }
+  #note-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px; color: #aaddff; display: block; margin-bottom: 2px;
+  }
+  #current-note { transition: color .1s; }
+
+  /* Game Over / Win */
+  #gameover-screen .score-final { font-size: 11px; color: #fff; margin: 16px 0; }
+  #gameover-screen .score-val  { color: #ffd700; font-size: 18px; }
+
+  /* Bubbles bg */
+  .bubble {
+    position: absolute; border-radius: 50%;
+    background: rgba(0,200,255,.07); border: 1px solid rgba(0,200,255,.15);
+    animation: rise linear infinite;
+    pointer-events: none;
+  }
+  @keyframes rise {
+    from { transform: translateY(560px) scale(1); opacity: .5; }
+    to   { transform: translateY(-40px) scale(1.2); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Decorative bubbles -->
+  <div id="bubbles"></div>
+
+  <!-- ── WELCOME ── -->
+  <div class="screen" id="welcome-screen">
+    <h1>🐟 SINGIN' GOLDIE</h1>
+    <div class="sub">THE SINGING FISH ADVENTURE</div>
+    <p>Use your VOICE to control the goldfish!<br>
+       Sing HIGH to swim up · Sing LOW to dive down<br>
+       Collect 🍍 pineapples · Dodge nets, mines, crocs & shoes!</p>
+    <button class="btn" onclick="startCalibration()">🎤 CALIBRATE VOICE</button>
+    <p style="font-size:7px;color:#445566;margin-top:12px;">Microphone permission required</p>
+  </div>
+
+  <!-- ── CALIBRATION ── -->
+  <div class="screen hidden" id="calibration-screen">
+    <h1 style="font-size:18px">VOICE CALIBRATION</h1>
+    <div class="sub">SET YOUR SINGING RANGE</div>
+
+    <div class="steps-row">
+      <!-- Top note -->
+      <div class="calib-step">
+        <label id="top-label">① SING YOUR HIGHEST NOTE</label>
+        <div class="pitch-display" id="top-display" style="color:#ff6688">—</div>
+        <div class="pitch-bar-wrap"><div class="pitch-bar" id="top-bar" style="background:#ff6688"></div></div>
+        <div class="mic-note">hold the note steadily</div>
+        <button class="btn" id="set-top-btn" onclick="captureTop()">SET TOP NOTE</button>
+      </div>
+
+      <!-- Bottom note -->
+      <div class="calib-step">
+        <label id="bot-label">② SING YOUR LOWEST NOTE</label>
+        <div class="pitch-display" id="bot-display" style="color:#44aaff">—</div>
+        <div class="pitch-bar-wrap"><div class="pitch-bar" id="bot-bar" style="background:#44aaff"></div></div>
+        <div class="mic-note">hold the note steadily</div>
+        <button class="btn secondary" id="set-bot-btn" onclick="captureBottom()">SET BOTTOM NOTE</button>
+      </div>
+    </div>
+
+    <div id="calib-status" style="font-size:8px;color:#aaddff;margin-top:10px;text-align:center"></div>
+    <button class="btn hidden" id="play-btn" onclick="startGame()">▶ START SWIMMING!</button>
+  </div>
+
+  <!-- ── GAME ── -->
+  <canvas id="gameCanvas" width="900" height="550"></canvas>
+  <div id="hud">
+    <div id="score-display">SCORE: <span id="score-val">0</span></div>
+    <div id="lives-display">♥ ♥ ♥</div>
+  </div>
+  <div id="note-hud">
+    <span id="note-label">NOTE</span>
+    <span id="current-note">—</span>
+  </div>
+
+  <!-- ── GAME OVER ── -->
+  <div class="screen hidden" id="gameover-screen">
+    <h1 style="font-size:20px" id="go-title">GAME OVER</h1>
+    <div class="sub" id="go-sub">GOLDIE DIDN'T MAKE IT...</div>
+    <div class="score-final">SCORE: <span class="score-val" id="go-score">0</span></div>
+    <button class="btn" onclick="restartGame()">🔄 PLAY AGAIN</button>
+    <button class="btn secondary" onclick="recalibrate()">🎤 RECALIBRATE</button>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   AUDIO / PITCH DETECTION
+═══════════════════════════════════════════════════ */
+let audioCtx, analyser, micStream;
+let pitchBuffer, pitchBufferSize = 2048;
+let currentFreq = 0;
+let topFreq = 800, botFreq = 100;
+let topSet = false, botSet = false;
+
+async function initMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = stream;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = pitchBufferSize;
+    analyser.smoothingTimeConstant = 0.3;
+    src.connect(analyser);
+    pitchBuffer = new Float32Array(analyser.fftSize);
+    return true;
+  } catch(e) {
+    alert('Microphone access denied. Please allow mic and refresh.');
+    return false;
+  }
+}
+
+// Autocorrelation pitch detection
+function detectPitch() {
+  if (!analyser) return 0;
+  analyser.getFloatTimeDomainData(pitchBuffer);
+  const sampleRate = audioCtx.sampleRate;
+  const SIZE = pitchBuffer.length;
+
+  // RMS check
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += pitchBuffer[i] * pitchBuffer[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.015) return 0;
+
+  // Autocorrelation
+  let r1 = 0, r2 = SIZE - 1;
+  const thres = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(pitchBuffer[i]) < thres) { r1 = i; break; } }
+  for (let i = 1; i < SIZE / 2; i++) { if (Math.abs(pitchBuffer[SIZE - i]) < thres) { r2 = Size - i; break; } }
+  const buf2 = pitchBuffer.slice(r1, r2);
+  const c = new Float32Array(buf2.length);
+  for (let i = 0; i < buf2.length; i++)
+    for (let j = 0; j < buf2.length - i; j++) c[i] += buf2[j] * buf2[j + i];
+
+  let d = 0;
+  while (d < c.length && c[d] > c[d + 1]) d++;
+  let maxVal = -1, maxPos = -1;
+  for (let i = d; i < c.length; i++) {
+    if (c[i] > maxVal) { maxVal = c[i]; maxPos = i; }
+  }
+  if (maxPos < 2) return 0;
+  let T0 = maxPos;
+  const x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1] || 0;
+  const a = (x1 + x3 - 2 * x2) / 2;
+  const b = (x3 - x1) / 2;
+  if (a) T0 -= b / (2 * a);
+  return sampleRate / T0;
+}
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const NOTE_COLORS = {
+  'C':'#ff4466','C#':'#ff6633','D':'#ffaa00','D#':'#ffd700',
+  'E':'#88ff44','F':'#00ffcc','F#':'#00ddff','G':'#0088ff',
+  'G#':'#6644ff','A':'#cc44ff','A#':'#ff44cc','B':'#ff2288'
+};
+
+function freqToNote(freq) {
+  if (freq < 50) return null;
+  const noteNum = 12 * (Math.log2(freq / 440)) + 69;
+  const name = NOTE_NAMES[Math.round(noteNum) % 12];
+  const oct  = Math.floor(Math.round(noteNum) / 12) - 1;
+  return { name: name + oct, short: name, color: NOTE_COLORS[name] };
+}
+
+function freqToY(freq, canvasH) {
+  if (!freq || freq < 30) return canvasH / 2;
+  const lo = Math.log2(Math.max(botFreq, 30));
+  const hi = Math.log2(Math.max(topFreq, 31));
+  const f  = Math.log2(Math.max(freq, 30));
+  const t  = Math.max(0, Math.min(1, (f - lo) / (hi - lo)));
+  return canvasH * (1 - t); // high freq = top
+}
+
+/* ═══════════════════════════════════════════════════
+   CALIBRATION UI
+═══════════════════════════════════════════════════ */
+let calibTick = null;
+let liveFreq = 0;
+
+function startCalibration() {
+  initMic().then(ok => {
+    if (!ok) return;
+    show('calibration-screen');
+    hide('welcome-screen');
+    calibTick = setInterval(updateCalibUI, 60);
+  });
+}
+
+function updateCalibUI() {
+  liveFreq = detectPitch();
+  const note = freqToNote(liveFreq);
+  const label = note ? note.name : '—';
+  const color = note ? note.color : '#445566';
+
+  // Top panel
+  if (!topSet) {
+    document.getElementById('top-display').textContent = label;
+    document.getElementById('top-display').style.color = color;
+    const pct = liveFreq > 0 ? Math.min(100, (Math.log2(Math.max(liveFreq,30)) - 4) / 4 * 100) : 0;
+    document.getElementById('top-bar').style.width = pct + '%';
+  }
+  // Bottom panel
+  if (!botSet) {
+    document.getElementById('bot-display').textContent = label;
+    document.getElementById('bot-display').style.color = color;
+    const pct = liveFreq > 0 ? Math.min(100, (Math.log2(Math.max(liveFreq,30)) - 4) / 4 * 100) : 0;
+    document.getElementById('bot-bar').style.width = pct + '%';
+  }
+}
+
+function captureTop() {
+  if (!liveFreq || liveFreq < 50) { alert('No pitch detected. Sing a note!'); return; }
+  topFreq = liveFreq;
+  topSet = true;
+  const note = freqToNote(topFreq);
+  document.getElementById('top-display').textContent = note ? note.name : '—';
+  document.getElementById('top-label').classList.add('step-done');
+  document.getElementById('set-top-btn').textContent = '✓ SET';
+  document.getElementById('set-top-btn').style.opacity = '.5';
+  checkCalibDone();
+}
+
+function captureBottom() {
+  if (!liveFreq || liveFreq < 30) { alert('No pitch detected. Sing a note!'); return; }
+  botFreq = liveFreq;
+  botSet = true;
+  const note = freqToNote(botFreq);
+  document.getElementById('bot-display').textContent = note ? note.name : '—';
+  document.getElementById('bot-label').classList.add('step-done');
+  document.getElementById('set-bot-btn').textContent = '✓ SET';
+  document.getElementById('set-bot-btn').style.opacity = '.5';
+  checkCalibDone();
+}
+
+function checkCalibDone() {
+  if (topSet && botSet) {
+    // ensure top > bot
+    if (topFreq < botFreq) [topFreq, botFreq] = [botFreq, topFreq];
+    document.getElementById('calib-status').textContent = '✓ Range calibrated! Ready to swim!';
+    document.getElementById('play-btn').classList.remove('hidden');
+    clearInterval(calibTick);
+  }
+}
+
+function recalibrate() {
+  topSet = botSet = false;
+  hide('gameover-screen');
+  show('calibration-screen');
+  calibTick = setInterval(updateCalibUI, 60);
+  document.getElementById('play-btn').classList.add('hidden');
+  document.getElementById('calib-status').textContent = '';
+}
+
+/* ═══════════════════════════════════════════════════
+   GAME ENGINE
+═══════════════════════════════════════════════════ */
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let score = 0, lives = 3, gameRunning = false, raf;
+let fishY = H / 2, fishVY = 0, fishTargetY = H / 2;
+let frameCount = 0, speed = 2.5, spawnTimer = 0;
+let particles = [], obstacles = [], prizes = [];
+let bgOffset = 0;
+
+// Goldie pixel art (16×12 grid) — gold fish facing left
+const FISH_W = 48, FISH_H = 36;
+function drawFish(x, y, vy) {
+  const s = 3; // scale
+  const cols = 16, rows = 12;
+  // Color palette
+  const G = '#ffd700', D = '#ffaa00', O = '#ff8800', E = '#ff6600', T = '#fff8aa', C = '#ff4400', _=null;
+  const sprite = [
+    [_,_,_,_,_,_,_,_,G,G,_,_,_,_,_,_],
+    [_,_,_,_,_,_,G,G,G,G,G,_,_,_,_,_],
+    [_,_,_,_,G,G,G,G,G,G,G,G,_,_,O,O],
+    [_,_,_,G,G,D,D,G,G,G,G,G,G,O,O,O],
+    [O,O,_,G,D,D,D,G,T,G,G,G,G,G,O,O],
+    [O,O,O,G,G,D,G,G,C,G,G,G,G,G,G,O],
+    [O,O,O,G,G,D,G,G,G,G,G,G,G,G,G,O],
+    [O,O,_,G,D,D,D,G,G,G,G,G,G,G,O,O],
+    [_,_,_,G,G,D,D,G,G,G,G,G,G,O,O,O],
+    [_,_,_,_,G,G,G,G,G,G,G,G,_,_,O,O],
+    [_,_,_,_,_,_,G,G,G,G,G,_,_,_,_,_],
+    [_,_,_,_,_,_,_,_,G,G,_,_,_,_,_,_],
+  ];
+  const tilt = Math.max(-0.3, Math.min(0.3, vy * 0.04));
+  ctx.save();
+  ctx.translate(x + FISH_W/2, y + FISH_H/2);
+  ctx.rotate(tilt);
+  // Draw pixels
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const col = sprite[r][c];
+      if (!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(-FISH_W/2 + c*s, -FISH_H/2 + r*s, s, s);
+    }
+  }
+  ctx.restore();
+}
+
+// Draw net obstacle
+function drawNet(x, y, w, h) {
+  ctx.strokeStyle = '#cc9944'; ctx.lineWidth = 2;
+  const step = 18;
+  // Vertical lines
+  for (let dx = 0; dx <= w; dx += step) {
+    ctx.beginPath(); ctx.moveTo(x+dx, y); ctx.lineTo(x+dx, y+h); ctx.stroke();
+  }
+  // Horizontal lines
+  for (let dy = 0; dy <= h; dy += step) {
+    ctx.beginPath(); ctx.moveTo(x, y+dy); ctx.lineTo(x+w, y+dy); ctx.stroke();
+  }
+  // Frame
+  ctx.strokeStyle = '#ffcc66'; ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, w, h);
+  // Float
+  ctx.fillStyle = '#ff4400';
+  for (let dx = 0; dx <= w; dx += step*2) {
+    ctx.beginPath(); ctx.arc(x+dx, y, 6, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// Draw mine
+function drawMine(x, y, r) {
+  ctx.save(); ctx.translate(x, y);
+  // Spikes
+  ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2.5;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r);
+    ctx.lineTo(Math.cos(a)*(r+10), Math.sin(a)*(r+10)); ctx.stroke();
+  }
+  // Body
+  const g = ctx.createRadialGradient(0,0,2,0,0,r);
+  g.addColorStop(0,'#555'); g.addColorStop(1,'#111');
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
+  // Shine
+  ctx.fillStyle = 'rgba(255,255,255,.15)';
+  ctx.beginPath(); ctx.arc(-r*.25,-r*.3,r*.25,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// Draw crocodile (pixelated)
+function drawCroc(x, y) {
+  const s = 3;
+  const G='#228822',D='#115511',W='#ffffff',R='#ff2222',Y='#ffff00', _=null;
+  const sprite = [
+    [_,_,_,_,G,G,G,G,G,G,_,_,_,_],
+    [_,_,G,G,G,G,G,G,G,G,G,G,_,_],
+    [G,G,G,D,G,D,G,G,D,G,D,G,G,G],
+    [W,W,W,W,G,G,G,G,G,G,W,W,W,W],
+    [R,R,R,R,G,G,G,G,G,G,R,R,R,R],
+    [_,G,G,G,G,G,G,G,G,G,G,G,G,_],
+    [_,_,G,G,G,G,G,G,G,G,G,G,_,_],
+    [_,_,Y,G,_,_,_,_,_,_,G,Y,_,_],
+  ];
+  for (let r=0;r<sprite.length;r++)
+    for (let c=0;c<sprite[r].length;c++) {
+      if (!sprite[r][c]) continue;
+      ctx.fillStyle = sprite[r][c];
+      ctx.fillRect(x+c*s, y+r*s, s, s);
+    }
+}
+
+// Draw shoe
+function drawShoe(x, y) {
+  const s = 3;
+  const B='#2233aa',D='#112288',W='#ffffff', _=null;
+  const sprite = [
+    [_,_,_,B,B,B,B,B,_,_,_,_,_,_],
+    [_,_,B,B,B,B,B,B,B,_,_,_,_,_],
+    [_,B,B,D,B,B,B,B,B,B,_,_,_,_],
+    [B,B,B,B,B,B,B,B,B,B,B,B,_,_],
+    [B,B,W,W,W,B,B,B,B,B,B,B,B,_],
+    [B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+    [_,B,B,B,B,B,B,B,B,B,B,B,B,B],
+    [_,_,B,B,B,_,_,_,_,B,B,B,B,_],
+  ];
+  for (let r=0;r<sprite.length;r++)
+    for (let c=0;c<sprite[r].length;c++) {
+      if (!sprite[r][c]) continue;
+      ctx.fillStyle = sprite[r][c];
+      ctx.fillRect(x+c*s, y+r*s, s, s);
+    }
+}
+
+// Draw pineapple
+function drawPineapple(x, y, pulse) {
+  const s = 3;
+  const Y='#f5c518',D='#cc9900',G='#33bb33',K='#226622',H='#ffdd44', _=null;
+  const sprite = [
+    [_,_,G,_,G,_,G,_,_,_],
+    [_,G,K,G,K,G,K,G,_,_],
+    [_,_,G,G,G,G,G,_,_,_],
+    [_,Y,Y,Y,Y,Y,Y,Y,_,_],
+    [Y,H,D,H,D,H,D,H,Y,_],
+    [Y,D,H,D,H,D,H,D,Y,_],
+    [Y,H,D,H,D,H,D,H,Y,_],
+    [Y,D,H,D,H,D,H,D,Y,_],
+    [Y,H,D,H,D,H,D,H,Y,_],
+    [_,Y,Y,Y,Y,Y,Y,Y,_,_],
+    [_,_,D,D,D,D,D,_,_,_],
+  ];
+  const sc = 1 + pulse * 0.05;
+  ctx.save(); ctx.translate(x+15, y+15); ctx.scale(sc,sc);
+  for (let r=0;r<sprite.length;r++)
+    for (let c=0;c<sprite[r].length;c++) {
+      if (!sprite[r][c]) continue;
+      ctx.fillStyle = sprite[r][c];
+      ctx.fillRect(-15+c*s, -15+r*s, s, s);
+    }
+  ctx.restore();
+}
+
+// Background: underwater
+function drawBackground() {
+  // Sky/deep gradient
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#001428');
+  g.addColorStop(0.5,'#002244');
+  g.addColorStop(1,'#001a35');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // Caustics (light rays)
+  ctx.save(); ctx.globalAlpha = 0.04;
+  for (let i=0;i<6;i++) {
+    const rx = ((bgOffset * 0.3 + i*160) % (W+200)) - 100;
+    const g2 = ctx.createLinearGradient(rx, 0, rx+60, H);
+    g2.addColorStop(0,'#00aaff'); g2.addColorStop(1,'transparent');
+    ctx.fillStyle = g2;
+    ctx.beginPath();
+    ctx.moveTo(rx,0); ctx.lineTo(rx+80,H); ctx.lineTo(rx+120,H); ctx.lineTo(rx+40,0);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Seabed
+  ctx.fillStyle = '#001833';
+  ctx.fillRect(0, H-40, W, 40);
+  // Rocks
+  for (let i=0;i<8;i++) {
+    const rx = ((bgOffset*0.5 + i*120) % (W+100)) - 50;
+    ctx.fillStyle = '#223355';
+    ctx.beginPath(); ctx.ellipse(rx, H-35, 22+i%3*6, 15+i%2*5, 0, 0, Math.PI*2); ctx.fill();
+  }
+  // Seaweed
+  for (let i=0;i<5;i++) {
+    const sx = ((bgOffset*0.8 + i*190) % (W+100)) - 50;
+    const wave = Math.sin(frameCount*0.04 + i) * 10;
+    ctx.strokeStyle = '#00aa44'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sx, H-38);
+    ctx.quadraticCurveTo(sx+wave, H-70, sx+wave*1.5, H-100);
+    ctx.quadraticCurveTo(sx+wave*2, H-130, sx+wave, H-160);
+    ctx.stroke();
+  }
+}
+
+// Particles
+function spawnParticle(x, y, color, count=6) {
+  for (let i=0;i<count;i++) {
+    const a = Math.random()*Math.PI*2;
+    const sp = 1+Math.random()*3;
+    particles.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-1,
+      color, life:1, size:2+Math.random()*3});
+  }
+}
+
+function spawnObstacle() {
+  const types = ['net','mine','croc','shoe'];
+  const type = types[Math.floor(Math.random()*types.length)];
+  let obj = { type, x: W+60, alive: true };
+  if (type === 'net') {
+    obj.w = 50 + Math.random()*40;
+    obj.h = 80 + Math.random()*120;
+    obj.y = Math.random()*(H - 60 - obj.h) + 20;
+    obj.hitbox = ()=>({x:obj.x, y:obj.y, w:obj.w, h:obj.h});
+  } else if (type === 'mine') {
+    obj.r = 22;
+    obj.y = 60 + Math.random()*(H-120);
+    obj.vy = (Math.random()-.5)*0.8;
+    obj.hitbox = ()=>({cx:obj.x, cy:obj.y, r:obj.r});
+  } else if (type === 'croc') {
+    obj.y = 30 + Math.random()*(H-100);
+    obj.w = 42; obj.h = 24;
+    obj.hitbox = ()=>({x:obj.x, y:obj.y, w:obj.w, h:obj.h});
+  } else { // shoe
+    obj.y = 40 + Math.random()*(H-100);
+    obj.w = 42; obj.h = 24;
+    obj.vy = (Math.random()-.5)*1.2;
+    obj.hitbox = ()=>({x:obj.x, y:obj.y, w:obj.w, h:obj.h});
+  }
+  return obj;
+}
+
+function spawnPrize() {
+  return { x: W+60, y: 40+Math.random()*(H-120), alive:true,
+    pulse: 0, pulseDir: 1 };
+}
+
+function hitTestRect(fx, fy, obj) {
+  const hb = obj.hitbox();
+  if (hb.cx !== undefined) {
+    const dx = (fx+FISH_W/2) - hb.cx, dy = (fy+FISH_H/2) - hb.cy;
+    return Math.sqrt(dx*dx+dy*dy) < hb.r + 10;
+  }
+  return fx+6 < hb.x+hb.w && fx+FISH_W-6 > hb.x &&
+         fy+6 < hb.y+hb.h && fy+FISH_H-6 > hb.y;
+}
+
+let invincible = 0; // invincibility frames after hit
+let flashFish = false;
+
+function updateGame() {
+  if (!gameRunning) return;
+
+  // Pitch detection
+  const freq = detectPitch();
+  if (freq > 30) {
+    fishTargetY = freqToY(freq, H) - FISH_H/2;
+    fishTargetY = Math.max(5, Math.min(H - FISH_H - 5, fishTargetY));
+    currentFreq = freq;
+  }
+
+  // Smooth fish movement
+  fishVY = (fishTargetY - fishY) * 0.12;
+  fishY += fishVY;
+  fishY = Math.max(5, Math.min(H - FISH_H - 5, fishY));
+
+  // Background scroll
+  bgOffset += speed;
+  frameCount++;
+
+  // Speed ramp
+  if (frameCount % 600 === 0) speed = Math.min(7, speed + 0.3);
+
+  // Spawn
+  spawnTimer++;
+  const spawnRate = Math.max(60, 110 - frameCount/120);
+  if (spawnTimer >= spawnRate) {
+    spawnTimer = 0;
+    obstacles.push(spawnObstacle());
+    if (Math.random() < 0.45) prizes.push(spawnPrize());
+  }
+
+  // Move obstacles
+  obstacles.forEach(o => {
+    o.x -= speed;
+    if (o.type === 'mine') o.y += o.vy;
+    if (o.type === 'shoe') { o.y += o.vy; o.vy += 0.05; if(o.y>H-50){o.y=H-50;o.vy*=-0.5;}}
+    if (o.y !== undefined && (o.type==='mine'||o.type==='shoe')) {
+      if (o.y < 20) { o.vy = Math.abs(o.vy); }
+      if (o.y > H-60) { o.vy = -Math.abs(o.vy); }
+    }
+    // Collision
+    if (o.alive && invincible <= 0 && hitTestRect(36, fishY, o)) {
+      o.alive = false;
+      lives--;
+      invincible = 90;
+      spawnParticle(36+FISH_W/2, fishY+FISH_H/2, '#ff4466', 12);
+      updateLives();
+      if (lives <= 0) { setTimeout(gameOver, 200); }
+    }
+  });
+  obstacles = obstacles.filter(o => o.x > -150 && o.alive);
+
+  // Move prizes
+  prizes.forEach(p => {
+    p.x -= speed;
+    p.pulse += p.pulseDir * 0.08;
+    if (p.pulse > 1 || p.pulse < 0) p.pulseDir *= -1;
+    // Collect
+    const dx = (36+FISH_W/2) - (p.x+15), dy = (fishY+FISH_H/2) - (p.y+15);
+    if (p.alive && Math.sqrt(dx*dx+dy*dy) < 28) {
+      p.alive = false;
+      score += 100;
+      document.getElementById('score-val').textContent = score;
+      spawnParticle(p.x+15, p.y+15, '#ffd700', 10);
+    }
+  });
+  prizes = prizes.filter(p => p.x > -80 && p.alive);
+
+  if (invincible > 0) invincible--;
+
+  // Draw
+  drawBackground();
+
+  // Particles
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.025;
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+  particles = particles.filter(p => p.life > 0);
+
+  // Obstacles
+  obstacles.forEach(o => {
+    if (o.type==='net') drawNet(o.x, o.y, o.w, o.h);
+    else if (o.type==='mine') drawMine(o.x, o.y, o.r);
+    else if (o.type==='croc') drawCroc(o.x, o.y);
+    else drawShoe(o.x, o.y);
+  });
+
+  // Prizes
+  prizes.forEach(p => drawPineapple(p.x, p.y, p.pulse));
+
+  // Fish
+  if (invincible <= 0 || Math.floor(invincible / 8) % 2 === 0) {
+    drawFish(36, fishY, fishVY);
+  }
+
+  // Note HUD
+  const note = freqToNote(currentFreq);
+  const noteEl = document.getElementById('current-note');
+  if (note && freq > 30) {
+    noteEl.textContent = note.short;
+    noteEl.style.color = note.color;
+    noteEl.style.textShadow = `0 0 20px ${note.color}`;
+  } else {
+    noteEl.textContent = '—';
+    noteEl.style.color = '#445566';
+    noteEl.style.textShadow = 'none';
+  }
+
+  raf = requestAnimationFrame(updateGame);
+}
+
+function updateLives() {
+  const hearts = ['♥ ♥ ♥','♥ ♥ ♡','♥ ♡ ♡','♡ ♡ ♡'];
+  document.getElementById('lives-display').textContent = hearts[Math.max(0,3-lives)];
+}
+
+function startGame() {
+  clearInterval(calibTick);
+  hide('calibration-screen');
+  hide('welcome-screen');
+  score = 0; lives = 3; fishY = H/2; fishVY = 0; fishTargetY = H/2;
+  frameCount = 0; speed = 2.5; spawnTimer = 0; bgOffset = 0;
+  obstacles = []; prizes = []; particles = [];
+  invincible = 0; currentFreq = 0;
+
+  document.getElementById('score-val').textContent = '0';
+  updateLives();
+
+  canvas.style.display = 'block';
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('note-hud').style.display = 'block';
+
+  gameRunning = true;
+  updateGame();
+}
+
+function gameOver() {
+  gameRunning = false;
+  cancelAnimationFrame(raf);
+  canvas.style.display = 'none';
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('note-hud').style.display = 'none';
+
+  const won = score >= 2000;
+  document.getElementById('go-title').textContent = won ? '🏆 YOU WIN!' : 'GAME OVER';
+  document.getElementById('go-sub').textContent  = won ? 'GOLDIE IS CHAMPION!' : 'GOLDIE DIDN\'T MAKE IT...';
+  document.getElementById('go-score').textContent = score;
+  show('gameover-screen');
+}
+
+function restartGame() {
+  hide('gameover-screen');
+  startGame();
+}
+
+/* ═══════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════ */
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+// Spawn decorative bubbles
+(function spawnBubbles() {
+  const wrap = document.getElementById('bubbles');
+  for (let i=0;i<14;i++) {
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const sz = 8+Math.random()*30;
+    b.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random()*100}%;
+      animation-duration:${5+Math.random()*8}s;
+      animation-delay:-${Math.random()*10}s`;
+    wrap.appendChild(b);
+  }
+})();
+</script>
+</body>
+</html>
